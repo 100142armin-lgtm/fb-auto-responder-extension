@@ -23,15 +23,36 @@ async function setWorkerState(newState) {
 
 console.log("FB Auto-Responder Service Worker v6.0.0 Initialized (Pure Comments Manager Mode A).");
 
+function isValidGoogleAppsScriptUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.hostname === 'script.google.com';
+  } catch (e) {
+    return false;
+  }
+}
+
 // ── 监听来自 Popup 与 Content Script 的指令 ──────────────────────────────
 chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+  // 安全校验 1：确保消息仅来自本扩展
+  if (sender.id !== chrome.runtime.id) {
+    return false;
+  }
+
+  // 安全校验 2：管控指令 (启动/停止/测试/打开面板) 仅允许来自内部扩展页面 (Popup/Dashboard)，禁止网页 Content Script 越权调用
+  const isInternalPage = !sender.tab;
+
   if (req.action === "START_MONITOR") {
+    if (!isInternalPage) return false;
     startMonitoring();
     sendResponse({ status: "STARTED" });
   } else if (req.action === "PAUSE_MONITOR") {
+    if (!isInternalPage) return false;
     stopMonitoring(true);
     sendResponse({ status: "PAUSED" });
   } else if (req.action === "STOP_MONITOR") {
+    if (!isInternalPage) return false;
     stopMonitoring(false);
     sendResponse({ status: "STOPPED" });
   } else if (req.action === "TRIGGER_EMERGENCY_BRAKE") {
@@ -50,6 +71,7 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     });
     return true; // 异步响应
   } else if (req.action === "OPEN_COMMENTS_MANAGER") {
+    if (!isInternalPage) return false;
     const cmUrl = "https://www.facebook.com/professional_dashboard/engagement/comments_manager/";
     chrome.tabs.create({ url: cmUrl, active: true }, (tab) => {
       chrome.tabs.update(tab.id, { autoDiscardable: false });
@@ -58,6 +80,7 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     sendResponse({ status: "OPENED" });
     return true;
   } else if (req.action === "TEST_GOOGLE_SHEET") {
+    if (!isInternalPage) return false;
     testGoogleSheetConnection(req.webhookUrl, req.sheetName).then(res => {
       sendResponse(res);
     }).catch(err => {
@@ -289,7 +312,7 @@ async function triggerEmergencyBrake(reason) {
 async function syncToGoogleSheets(rowPayload) {
   try {
     const sheets = await StorageUtil.getGoogleSheets();
-    const enabledSheets = sheets.filter(s => s.enabled && s.webhookUrl);
+    const enabledSheets = sheets.filter(s => s.enabled && isValidGoogleAppsScriptUrl(s.webhookUrl));
     if (enabledSheets.length === 0) return { success: true, count: 0 };
 
     console.log(`[Google Sheets] 开始向 ${enabledSheets.length} 个启用表格推送数据...`);
@@ -324,6 +347,9 @@ async function syncToGoogleSheets(rowPayload) {
 async function testGoogleSheetConnection(webhookUrl, sheetName) {
   try {
     if (!webhookUrl) throw new Error("缺少 Webhook 链接");
+    if (!isValidGoogleAppsScriptUrl(webhookUrl)) {
+      throw new Error("无效的 Webhook 链接：必须为 https://script.google.com/ 开头的安全地址");
+    }
     const now = new Date();
     const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;

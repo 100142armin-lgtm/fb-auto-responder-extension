@@ -17,13 +17,10 @@
   "permissions": [
     "storage",
     "tabs",
-    "scripting",
-    "alarms",
     "notifications"
   ],
   "host_permissions": [
     "https://*.facebook.com/*",
-    "https://*.messenger.com/*",
     "https://script.google.com/*"
   ],
   "background": {

@@ -343,20 +343,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       const card = document.createElement('div');
       card.className = 'rule-item-card';
 
+      const safeName = escapeHtml(r.name || '未命名规则');
+      const safeId = escapeHtml(r.id || '');
+      const safeMatchType = r.matchType === 'exact' ? '精准匹配' : '包含关键词';
+      const kwCount = Array.isArray(r.keywords) ? r.keywords.length : 0;
+      const tplCount = Array.isArray(r.dmTemplates) ? r.dmTemplates.length : 0;
+
       card.innerHTML = `
         <div class="rule-item-info">
-          <h4>${r.name || '未命名规则'}</h4>
+          <h4>${safeName}</h4>
           <div class="rule-tags">
-            <span class="tag tag-cyan">模式: ${r.matchType === 'exact' ? '精准匹配' : '包含关键词'}</span>
+            <span class="tag tag-cyan">模式: ${safeMatchType}</span>
             <span class="tag tag-purple">动作: 仅发私信</span>
           </div>
           <div style="font-size:12px; color:var(--text-muted); margin-top:6px;">
-            关键词 (${(r.keywords || []).length}个) | 私信模板 (${(r.dmTemplates || []).length}套)
+            关键词 (${kwCount}个) | 私信模板 (${tplCount}套)
           </div>
         </div>
         <div class="rule-actions">
-          <button class="btn btn-secondary btn-edit-rule" data-id="${r.id}">编辑</button>
-          <button class="btn btn-danger-outline btn-del-rule" data-id="${r.id}">删除</button>
+          <button class="btn btn-secondary btn-edit-rule" data-id="${safeId}">编辑</button>
+          <button class="btn btn-danger-outline btn-del-rule" data-id="${safeId}">删除</button>
         </div>
       `;
       rulesContainer.appendChild(card);
@@ -509,6 +515,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnClearLogs = document.getElementById('btnClearLogs');
   const btnResetHistoryLogs = document.getElementById('btnResetHistoryLogs');
 
+  function safeHttpUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+    return null;
+  }
+
   async function renderLogs() {
     const logs = await StorageUtil.getLogs();
     logsTableBody.innerHTML = '';
@@ -520,8 +535,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     logs.forEach(item => {
       const tr = document.createElement('tr');
-      const profileLinkHtml = item.profileLink ? `<a href="${escapeHtml(item.profileLink)}" target="_blank">主页</a>` : '-';
-      const postUrlHtml = item.postUrl ? `<a href="${escapeHtml(item.postUrl)}" target="_blank">贴文</a>` : '-';
+      const safeProfile = safeHttpUrl(item.profileLink);
+      const safePost = safeHttpUrl(item.postUrl);
+      const profileLinkHtml = safeProfile ? `<a href="${escapeHtml(safeProfile)}" target="_blank" rel="noopener noreferrer">主页</a>` : '-';
+      const postUrlHtml = safePost ? `<a href="${escapeHtml(safePost)}" target="_blank" rel="noopener noreferrer">贴文</a>` : '-';
       
       const safeUserName = escapeHtml(item.userName);
       const safeKeyword = escapeHtml(item.matchedKeyword);
@@ -595,11 +612,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     reader.onload = async (evt) => {
       try {
         const data = JSON.parse(evt.target.result);
-        if (data.settings) await StorageUtil.saveSettings(data.settings);
-        if (data.rules) await StorageUtil.saveRules(data.rules);
-        if (data.googleSheets) await StorageUtil.saveGoogleSheets(data.googleSheets);
+        if (!data || typeof data !== 'object') {
+          throw new Error("无效的配置文件结构");
+        }
+        if (data.settings && typeof data.settings === 'object') {
+          await StorageUtil.saveSettings(data.settings);
+        }
+        if (Array.isArray(data.rules)) {
+          await StorageUtil.saveRules(data.rules);
+        }
+        if (Array.isArray(data.googleSheets)) {
+          await StorageUtil.saveGoogleSheets(data.googleSheets);
+        }
         alert("✓ 配置文件导入成功！规则、参数与谷歌表格配置已更新。");
-        loadUrls();
         renderRules();
         loadAntibanSettings();
         renderGoogleSheets();
@@ -740,11 +765,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     sheetsListContainer.innerHTML = sheets.map(sheet => {
       // 智能识别表格浏览链接（优先读 docUrl，其次如果 name 包含 docs.google.com 则自适应提取）
-      const docUrl = sheet.docUrl || (sheet.name && sheet.name.includes('docs.google.com/spreadsheets') ? sheet.name : '');
+      const rawDocUrl = sheet.docUrl || (sheet.name && sheet.name.includes('docs.google.com/spreadsheets') ? sheet.name : '');
+      const docUrl = safeHttpUrl(rawDocUrl);
       const hasDocUrl = !!docUrl;
+      const safeWebhook = safeHttpUrl(sheet.webhookUrl) || '';
 
       return `
-      <div class="sheet-card ${sheet.enabled ? '' : 'disabled'}" data-id="${sheet.id}">
+      <div class="sheet-card ${sheet.enabled ? '' : 'disabled'}" data-id="${escapeHtml(sheet.id)}">
         <div class="sheet-card-info">
           <div class="sheet-card-title-row">
             <h4 class="sheet-card-title" title="${escapeHtml(sheet.name)}">${escapeHtml(sheet.name)}</h4>
@@ -773,16 +800,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         </div>
         <div class="sheet-card-actions">
-          <button class="btn btn-sm btn-info btn-test-sheet" data-id="${sheet.id}" data-url="${escapeHtml(sheet.webhookUrl)}" data-sheet="${escapeHtml(sheet.sheetName || 'Sheet1')}">
+          <button class="btn btn-sm btn-info btn-test-sheet" data-id="${escapeHtml(sheet.id)}" data-url="${escapeHtml(safeWebhook)}" data-sheet="${escapeHtml(sheet.sheetName || 'Sheet1')}">
             ⚡ 测试发送
           </button>
-          <button class="btn btn-sm btn-secondary btn-edit-sheet" data-id="${sheet.id}">
+          <button class="btn btn-sm btn-secondary btn-edit-sheet" data-id="${escapeHtml(sheet.id)}">
             ✏️ 编辑
           </button>
-          <button class="btn btn-sm ${sheet.enabled ? 'btn-warning' : 'btn-success'} btn-toggle-sheet" data-id="${sheet.id}">
+          <button class="btn btn-sm ${sheet.enabled ? 'btn-warning' : 'btn-success'} btn-toggle-sheet" data-id="${escapeHtml(sheet.id)}">
             ${sheet.enabled ? '⏸ 暂停' : '▶ 启用'}
           </button>
-          <button class="btn btn-sm btn-danger btn-delete-sheet" data-id="${sheet.id}">
+          <button class="btn btn-sm btn-danger btn-delete-sheet" data-id="${escapeHtml(sheet.id)}">
             🗑️ 删除
           </button>
         </div>
@@ -898,7 +925,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 初次加载数据
-  loadUrls();
   renderRules();
   loadAntibanSettings();
   renderGoogleSheets();

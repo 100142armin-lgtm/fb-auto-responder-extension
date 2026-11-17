@@ -85,6 +85,7 @@
   }
 
   chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+    if (sender.id !== chrome.runtime.id) return false;
     if (req.action === "SOFT_REFRESH_COMMENTS_MANAGER" || req.action === "SOFT_REFRESH_NOTIFICATIONS") {
       console.log("[Comments Manager Engine] 收到软巡检唤醒指令...");
       if (!isProcessingLoop) {

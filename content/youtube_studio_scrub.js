@@ -121,6 +121,7 @@
   }
 
   chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+    if (sender.id !== chrome.runtime.id) return false;
     if (req.action === "SOFT_REFRESH_YT_COMMENTS") {
       if (!isProcessingLoop) {
         runYoutubeCommentsLoop();
@@ -164,8 +165,8 @@
       return true;
     }
 
-    // 尝试从 URL 提取 /channel/UCxxxx 并直接跳转
-    const match = path.match(/^(\/channel\/[^/]+)/);
+    // 尝试从 URL 提取 /channel/UCxxxx 并直接跳转（严格校验频道 ID 字符集）
+    const match = path.match(/^(\/channel\/[A-Za-z0-9_-]+)/);
     if (match) {
       const targetUrl = `https://studio.youtube.com${match[1]}/comments/inbox`;
       console.log("[YT Studio Engine] 当前不在评论页面，自动跳转至:", targetUrl);

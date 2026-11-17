@@ -58,6 +58,19 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
 
   // 安全校验 2：管控指令 (启动/停止/测试/打开面板) 仅允许来自内部扩展页面 (Popup/Dashboard)，禁止网页 Content Script 越权调用
   const isInternalPage = !sender.tab;
+  const senderUrl = sender.tab && sender.tab.url ? sender.tab.url : '';
+  const isFromFbTab = (() => {
+    try {
+      const u = new URL(senderUrl);
+      return u.protocol === 'https:' && (u.hostname === 'facebook.com' || u.hostname.endsWith('.facebook.com'));
+    } catch (e) { return false; }
+  })();
+  const isFromYtTab = (() => {
+    try {
+      const u = new URL(senderUrl);
+      return u.protocol === 'https:' && u.hostname === 'studio.youtube.com';
+    } catch (e) { return false; }
+  })();
 
   if (req.action === "START_MONITOR") {
     if (!isInternalPage) return false;
@@ -72,14 +85,20 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     stopMonitoring(false);
     sendResponse({ status: "STOPPED" });
   } else if (req.action === "TRIGGER_EMERGENCY_BRAKE") {
-    triggerEmergencyBrake(req.reason);
+    if (!isInternalPage && !isFromFbTab) return false;
+    triggerEmergencyBrake(typeof req.reason === 'string' ? req.reason.slice(0, 300) : '');
     sendResponse({ status: "BRAKED" });
   } else if (req.action === "PAGE_FINISHED") {
+    if (!isInternalPage && !isFromFbTab) return false;
     // Content Script 报告当前批次已处理完毕，按设定间隔调度下一次巡检
     console.log("收到 PAGE_FINISHED，准备调度下一次巡检");
     scheduleNextUrl();
     sendResponse({ status: "ACK" });
   } else if (req.action === "SYNC_GOOGLE_SHEETS") {
+    if ((!isInternalPage && !isFromFbTab && !isFromYtTab) || !Array.isArray(req.payload)) {
+      sendResponse({ success: false, error: "Invalid sender or payload" });
+      return false;
+    }
     syncToGoogleSheets(req.payload).then(res => {
       sendResponse(res);
     }).catch(err => {
@@ -116,9 +135,11 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     stopYtMonitoring(false);
     sendResponse({ status: "STOPPED" });
   } else if (req.action === "YT_TRIGGER_EMERGENCY_BRAKE") {
-    triggerYtEmergencyBrake(req.reason);
+    if (!isInternalPage && !isFromYtTab) return false;
+    triggerYtEmergencyBrake(typeof req.reason === 'string' ? req.reason.slice(0, 300) : '');
     sendResponse({ status: "BRAKED" });
   } else if (req.action === "YT_PAGE_FINISHED") {
+    if (!isInternalPage && !isFromYtTab) return false;
     scheduleYtNextPoll();
     sendResponse({ status: "ACK" });
   } else if (req.action === "OPEN_YT_STUDIO_COMMENTS") {

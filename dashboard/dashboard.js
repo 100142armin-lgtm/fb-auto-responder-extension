@@ -650,6 +650,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     a.href = url;
     a.download = `FB_AutoResponder_Config_${Date.now()}.json`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
   btnImportConfig.addEventListener('click', () => fileImportConfig.click());
@@ -662,17 +663,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     reader.onload = async (evt) => {
       try {
         const data = JSON.parse(evt.target.result);
-        if (!data || typeof data !== 'object') {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
           throw new Error("无效的配置文件结构");
         }
-        if (data.settings && typeof data.settings === 'object') {
-          await StorageUtil.saveSettings(data.settings);
+        if (data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)) {
+          const cleanSettings = {};
+          const blockedKeys = ['__proto__', 'constructor', 'prototype'];
+          for (const [k, v] of Object.entries(data.settings)) {
+            if (!blockedKeys.includes(k)) cleanSettings[k] = v;
+          }
+          await StorageUtil.saveSettings(cleanSettings);
         }
         if (Array.isArray(data.rules)) {
-          await StorageUtil.saveRules(data.rules);
+          const validRules = data.rules.filter(r => r && typeof r === 'object' && !Array.isArray(r));
+          await StorageUtil.saveRules(validRules);
         }
         if (Array.isArray(data.googleSheets)) {
-          await StorageUtil.saveGoogleSheets(data.googleSheets);
+          const validSheets = data.googleSheets.filter(s => s && typeof s === 'object' && !Array.isArray(s));
+          await StorageUtil.saveGoogleSheets(validSheets);
         }
         alert("✓ 配置文件导入成功！规则、参数与谷歌表格配置已更新。");
         renderRules();

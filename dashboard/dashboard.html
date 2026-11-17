@@ -13,8 +13,8 @@
       <div class="sidebar-header">
         <img src="../assets/icon128.png" alt="Logo" class="sidebar-logo">
         <div class="sidebar-title">
-          <h2>FB 智能私信大师</h2>
-          <span>Pro Studio v1.6.0</span>
+          <h2>FB & YT 智能助手</h2>
+          <span>Pro Studio v1.7.0</span>
         </div>
       </div>
 
@@ -165,6 +165,67 @@
                   </label>
                 </div>
 
+                <!-- YouTube Studio 独立防封与回复策略配置 -->
+                <div class="form-group full-width-group" style="grid-column: 1 / -1; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 16px; margin-top: 10px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <h4 style="margin: 0; color: #f87171; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                      <span>📺 YouTube Studio 评论自动化与防封策略</span>
+                    </h4>
+                    <button type="button" class="btn btn-sm" id="btnOpenYtStudioFromDash" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); padding: 5px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">
+                      🔗 一键打开 YouTube Studio 评论后台
+                    </button>
+                  </div>
+                  <p style="margin: 0 0 14px 0; font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                    集中式监听频道下所有 <b>长视频 / Shorts 短视频 / 社区贴</b> 的未回复留言（支持英文、简体中文、繁体中文三语后台）。
+                  </p>
+
+                  <div class="form-grid" style="gap: 12px;">
+                    <div class="form-group">
+                      <label>YT 连续公开回复间隔 (秒):</label>
+                      <div class="range-inputs">
+                        <input type="number" id="inputYtReplyInterval" class="form-input" min="5" max="300" value="20">
+                        <span>秒</span>
+                      </div>
+                      <small class="help-text">YouTube 公开回复建议设为 15~30 秒，并配合多套随机话术防吞评。</small>
+                    </div>
+
+                    <div class="form-group">
+                      <label>YT 空闲自动刷新间隔 (秒):</label>
+                      <div class="range-inputs">
+                        <input type="number" id="inputYtIdleInterval" class="form-input" min="5" max="300" value="20">
+                        <span>秒</span>
+                      </div>
+                      <small class="help-text">当前未回复留言处理完后，自动刷新 YouTube Studio 拉取新留言的间隔。</small>
+                    </div>
+
+                    <div class="form-group">
+                      <label>YT 单用户去重冷却 (小时):</label>
+                      <div class="range-inputs">
+                        <input type="number" id="inputYtCooldown" class="form-input" min="0" max="720" value="24">
+                        <span>小时</span>
+                      </div>
+                      <small class="help-text">防止同一用户在多个视频下留言时被重复回复。</small>
+                    </div>
+
+                    <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
+                      <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; color: #fca5a5;">
+                        <input type="checkbox" id="checkYtAutoHeart">
+                        <span>❤️ 回复时顺便给留言点红心 (可选，默认关闭)</span>
+                      </label>
+                      <small class="help-text">开启后将在回复前附带 1.5~3.5 秒随机延迟并点亮创作者红心，提高回访率；如担心高频风控建议保持关闭。</small>
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 12px; background: rgba(0, 0, 0, 0.15); border-radius: 6px; padding: 10px 14px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; color: #e2e8f0; font-size: 13px;">
+                      <input type="checkbox" id="checkYtEnableTimeWindowFilter">
+                      <span>⏱️ YT 开启时效过滤：仅回复最近</span>
+                      <input type="number" id="inputYtMaxCommentAgeMinutes" class="form-input" min="1" max="1440" value="15" style="width: 70px; padding: 3px 6px;">
+                      <span>分钟内的新留言</span>
+                    </label>
+                  </div>
+                </div>
+
               </div>
               <div class="form-actions mt-4">
                 <button class="btn btn-primary" id="btnSaveAntiban">保存防封策略</button>
@@ -275,16 +336,17 @@
                   <thead>
                     <tr>
                       <th>时间</th>
+                      <th>平台</th>
                       <th>留言用户</th>
                       <th>主页链接</th>
-                      <th>目标贴文</th>
+                      <th>目标贴文/作品</th>
                       <th>匹配关键词</th>
                       <th>留言内容</th>
-                      <th>私信状态</th>
+                      <th>发送状态</th>
                     </tr>
                   </thead>
                   <tbody id="logsTableBody">
-                    <tr><td colspan="6" class="empty-cell">暂无日志数据</td></tr>
+                    <tr><td colspan="8" class="empty-cell">暂无日志数据</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -332,6 +394,16 @@
         <div class="form-group">
           <label>规则名称:</label>
           <input type="text" id="ruleName" class="form-input" placeholder="例: Amen 资料领用规则">
+        </div>
+
+        <div class="form-group">
+          <label>适用平台:</label>
+          <select id="rulePlatform" class="form-select">
+            <option value="facebook">📘 仅 Facebook (专业面板私信 DM)</option>
+            <option value="youtube">📺 仅 YouTube (Studio 评论区公开回复)</option>
+            <option value="all">🌐 全平台通用 (FB 私信 + YT 公开回复)</option>
+          </select>
+          <small class="help-text">提示：YouTube 为公开评论回复，建议单独配置委婉引导话术与多套随机模板，避免直接发硬广链接被系统隐藏。</small>
         </div>
 
         <div class="form-group">

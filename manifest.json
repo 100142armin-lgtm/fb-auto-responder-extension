@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "FB 智能私信大师",
-  "short_name": "FB Auto-Responder",
-  "version": "1.6.0",
-  "description": "全自动驻留专业面板【评论管理工具】全主页集中监控，高效私信意向用户，极致防封安全稳定。",
+  "name": "FB & YT 智能营销助手",
+  "short_name": "FB & YT Auto-Responder",
+  "version": "1.7.0",
+  "description": "全自动驻留 Facebook 评论管理工具 & YouTube Studio 评论后台，双平台集中监控、智能私信与公开回复，极致防封安全稳定。",
   "icons": {
     "16": "assets/icon16.png",
     "48": "assets/icon48.png",
@@ -12,7 +12,7 @@
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": "assets/icon48.png",
-    "default_title": "FB 智能私信大师 v1.6.0"
+    "default_title": "FB & YT 智能营销助手 v1.7.0"
   },
   "permissions": [
     "storage",
@@ -21,6 +21,7 @@
   ],
   "host_permissions": [
     "https://*.facebook.com/*",
+    "https://studio.youtube.com/*",
     "https://script.google.com/*"
   ],
   "background": {
@@ -36,6 +37,16 @@
         "content/comments_manager_scrub.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://studio.youtube.com/*"
+      ],
+      "js": [
+        "utils/storage.js",
+        "content/youtube_studio_scrub.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
@@ -44,7 +55,8 @@
         "assets/icon48.png"
       ],
       "matches": [
-        "https://*.facebook.com/*"
+        "https://*.facebook.com/*",
+        "https://studio.youtube.com/*"
       ]
     }
   ],

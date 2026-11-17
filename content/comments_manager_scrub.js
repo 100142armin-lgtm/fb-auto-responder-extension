@@ -1136,6 +1136,8 @@
     const normalize = (s) => (s || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
     const textNorm = normalize(commentText);
     for (const r of rules) {
+      const platform = r.platform || 'facebook';
+      if (platform !== 'facebook' && platform !== 'all') continue;
       if (!r.keywords || r.keywords.length === 0) continue;
       for (const kw of r.keywords) {
         const kwNorm = normalize(kw);

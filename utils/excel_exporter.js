@@ -28,18 +28,20 @@ const ExcelExporter = {
     const headers = [
       "序号",
       "记录时间",
+      "平台",
       "留言用户",
       "匹配关键词",
       "留言内容",
-      "私信触发状态",
+      "触发状态",
       "公开评论状态",
-      "贴文链接",
+      "贴文/作品链接",
       "日志级别"
     ];
 
     const rows = logs.map((item, index) => [
       index + 1,
       this.sanitizeCsvCell(item.timestamp),
+      this.sanitizeCsvCell(item.platform === 'youtube' ? 'YouTube' : 'Facebook'),
       this.sanitizeCsvCell(item.userName),
       this.sanitizeCsvCell(item.matchedKeyword),
       this.sanitizeCsvCell(item.commentText),

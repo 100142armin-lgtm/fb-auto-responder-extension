@@ -326,6 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnModalSave = document.getElementById('btnModalSave');
 
   const ruleName = document.getElementById('ruleName');
+  const rulePlatform = document.getElementById('rulePlatform');
   const ruleMatchType = document.getElementById('ruleMatchType');
 
   let editingRuleId = null;
@@ -345,6 +346,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const safeName = escapeHtml(r.name || '未命名规则');
       const safeId = escapeHtml(r.id || '');
+      const platformVal = r.platform || 'facebook';
+      const platformBadge = platformVal === 'youtube'
+        ? '<span class="tag" style="background: rgba(239,68,68,0.18); color: #fca5a5;">📺 仅 YouTube</span>'
+        : (platformVal === 'all'
+          ? '<span class="tag" style="background: rgba(16,185,129,0.18); color: #6ee7b7;">🌐 全平台通用</span>'
+          : '<span class="tag" style="background: rgba(59,130,246,0.18); color: #93c5fd;">📘 仅 Facebook</span>');
+      const actionLabel = platformVal === 'youtube' ? '公开回复' : (platformVal === 'all' ? '私信 + 公开回复' : '仅发私信');
       const safeMatchType = r.matchType === 'exact' ? '精准匹配' : '包含关键词';
       const kwCount = Array.isArray(r.keywords) ? r.keywords.length : 0;
       const tplCount = Array.isArray(r.dmTemplates) ? r.dmTemplates.length : 0;
@@ -353,11 +361,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="rule-item-info">
           <h4>${safeName}</h4>
           <div class="rule-tags">
+            ${platformBadge}
             <span class="tag tag-cyan">模式: ${safeMatchType}</span>
-            <span class="tag tag-purple">动作: 仅发私信</span>
+            <span class="tag tag-purple">动作: ${actionLabel}</span>
           </div>
           <div style="font-size:12px; color:var(--text-muted); margin-top:6px;">
-            关键词 (${kwCount}个) | 私信模板 (${tplCount}套)
+            关键词 (${kwCount}个) | 话术模板 (${tplCount}套)
           </div>
         </div>
         <div class="rule-actions">
@@ -384,6 +393,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!r) return;
         document.getElementById('modalTitle').textContent = "编辑规则";
         ruleName.value = r.name || '';
+        if (rulePlatform) rulePlatform.value = r.platform || 'facebook';
         ruleMatchType.value = r.matchType || 'contains';
 
         renderKeywordGrid('keywordsGrid', r.keywords || []);
@@ -394,6 +404,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       document.getElementById('modalTitle').textContent = "新建规则";
       ruleName.value = '新关键词规则';
+      if (rulePlatform) rulePlatform.value = 'facebook';
       ruleMatchType.value = 'contains';
 
       renderKeywordGrid('keywordsGrid', ['Amen', 'Amém', '领用', '资料']);
@@ -411,6 +422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ruleObj = {
       id: editingRuleId || ("rule_" + Date.now()),
       name: ruleName.value.trim() || '未命名规则',
+      platform: rulePlatform ? rulePlatform.value : 'facebook',
       matchType: ruleMatchType.value,
 
       keywords: getGridValues('keywordsGrid'),
@@ -450,6 +462,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputMaxCommentAgeMinutes = document.getElementById('inputMaxCommentAgeMinutes');
   const checkIncludeHistory = document.getElementById('checkIncludeHistory');
   const checkEmergencyBrake = document.getElementById('checkEmergencyBrake');
+  const inputYtReplyInterval = document.getElementById('inputYtReplyInterval');
+  const inputYtIdleInterval = document.getElementById('inputYtIdleInterval');
+  const inputYtCooldown = document.getElementById('inputYtCooldown');
+  const checkYtAutoHeart = document.getElementById('checkYtAutoHeart');
+  const checkYtEnableTimeWindowFilter = document.getElementById('checkYtEnableTimeWindowFilter');
+  const inputYtMaxCommentAgeMinutes = document.getElementById('inputYtMaxCommentAgeMinutes');
   const btnSaveAntiban = document.getElementById('btnSaveAntiban');
   const tipSaveAntiban = document.getElementById('tipSaveAntiban');
   const btnResetUserHistory = document.getElementById('btnResetUserHistory');
@@ -463,28 +481,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (inputMaxCommentAgeMinutes) inputMaxCommentAgeMinutes.value = settings.maxCommentAgeMinutes || 15;
     if (checkIncludeHistory) checkIncludeHistory.checked = !!settings.includeHistory;
     if (checkEmergencyBrake) checkEmergencyBrake.checked = settings.emergencyBrakeEnabled !== false;
+
+    if (inputYtReplyInterval) inputYtReplyInterval.value = settings.ytReplyIntervalSeconds !== undefined ? settings.ytReplyIntervalSeconds : 20;
+    if (inputYtIdleInterval) inputYtIdleInterval.value = settings.ytIdleRefreshSeconds !== undefined ? settings.ytIdleRefreshSeconds : 20;
+    if (inputYtCooldown) inputYtCooldown.value = settings.ytCooldownHours !== undefined ? settings.ytCooldownHours : 24;
+    if (checkYtAutoHeart) checkYtAutoHeart.checked = !!settings.ytAutoHeart;
+    if (checkYtEnableTimeWindowFilter) checkYtEnableTimeWindowFilter.checked = !!settings.ytEnableTimeWindowFilter;
+    if (inputYtMaxCommentAgeMinutes) inputYtMaxCommentAgeMinutes.value = settings.ytMaxCommentAgeMinutes || 15;
   }
 
   async function saveAntibanSettings() {
     const notifInterval = parseInt(inputNotificationInterval?.value, 10) || 15;
     const dmSec = parseInt(inputDmInterval.value, 10) || 10;
-    const cdHr = parseInt(inputCooldown.value, 10) || 24;
+    const cdHr = parseInt(inputCooldown.value, 10);
+    const finalCdHr = isNaN(cdHr) ? 24 : cdHr;
     const enableTimeWindow = checkEnableTimeWindowFilter ? checkEnableTimeWindowFilter.checked : false;
     const maxAgeMinutes = parseInt(inputMaxCommentAgeMinutes?.value, 10) || 15;
     const includeHistory = checkIncludeHistory ? checkIncludeHistory.checked : false;
     const emergencyBrake = checkEmergencyBrake ? checkEmergencyBrake.checked : true;
+
+    const ytReplySec = parseInt(inputYtReplyInterval?.value, 10) || 20;
+    const ytIdleSec = parseInt(inputYtIdleInterval?.value, 10) || 20;
+    const ytCdHrRaw = parseInt(inputYtCooldown?.value, 10);
+    const ytCdHr = isNaN(ytCdHrRaw) ? 24 : ytCdHrRaw;
+    const ytAutoHeart = checkYtAutoHeart ? checkYtAutoHeart.checked : false;
+    const ytEnableTimeWindow = checkYtEnableTimeWindowFilter ? checkYtEnableTimeWindowFilter.checked : false;
+    const ytMaxAge = parseInt(inputYtMaxCommentAgeMinutes?.value, 10) || 15;
 
     await StorageUtil.saveSettings({
       enableCommentsManagerMode: true,
       enableTargetUrlsMode: false,
       notificationCheckInterval: Math.max(5, notifInterval),
       dmIntervalSeconds: dmSec,
-      globalCooldownHours: cdHr,
-      dmCooldownHours: cdHr,
+      globalCooldownHours: finalCdHr,
+      dmCooldownHours: finalCdHr,
       enableTimeWindowFilter: enableTimeWindow,
       maxCommentAgeMinutes: Math.max(1, maxAgeMinutes),
       includeHistory: includeHistory,
-      emergencyBrakeEnabled: emergencyBrake
+      emergencyBrakeEnabled: emergencyBrake,
+      ytReplyIntervalSeconds: Math.max(5, ytReplySec),
+      ytIdleRefreshSeconds: Math.max(5, ytIdleSec),
+      ytCooldownHours: Math.max(0, ytCdHr),
+      ytAutoHeart: ytAutoHeart,
+      ytEnableTimeWindowFilter: ytEnableTimeWindow,
+      ytMaxCommentAgeMinutes: Math.max(1, ytMaxAge)
     });
 
     tipSaveAntiban.textContent = "✓ 防封与去重策略已保存！";
@@ -499,6 +539,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (inputMaxCommentAgeMinutes) inputMaxCommentAgeMinutes.addEventListener('change', saveAntibanSettings);
   if (checkIncludeHistory) checkIncludeHistory.addEventListener('change', saveAntibanSettings);
   if (checkEmergencyBrake) checkEmergencyBrake.addEventListener('change', saveAntibanSettings);
+  if (inputYtReplyInterval) inputYtReplyInterval.addEventListener('change', saveAntibanSettings);
+  if (inputYtIdleInterval) inputYtIdleInterval.addEventListener('change', saveAntibanSettings);
+  if (inputYtCooldown) inputYtCooldown.addEventListener('change', saveAntibanSettings);
+  if (checkYtAutoHeart) checkYtAutoHeart.addEventListener('change', saveAntibanSettings);
+  if (checkYtEnableTimeWindowFilter) checkYtEnableTimeWindowFilter.addEventListener('change', saveAntibanSettings);
+  if (inputYtMaxCommentAgeMinutes) inputYtMaxCommentAgeMinutes.addEventListener('change', saveAntibanSettings);
 
   async function handleResetUserHistory() {
     if (confirm("确定重置/清空已触达用户的去重冷却记录吗？重置后所有用户均可重新触发回复！")) {
@@ -529,7 +575,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     logsTableBody.innerHTML = '';
 
     if (logs.length === 0) {
-      logsTableBody.innerHTML = `<tr><td colspan="6" class="empty-cell">暂无日志数据</td></tr>`;
+      logsTableBody.innerHTML = `<tr><td colspan="8" class="empty-cell">暂无日志数据</td></tr>`;
       return;
     }
 
@@ -538,8 +584,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const safeProfile = safeHttpUrl(item.profileLink);
       const safePost = safeHttpUrl(item.postUrl);
       const profileLinkHtml = safeProfile ? `<a href="${escapeHtml(safeProfile)}" target="_blank" rel="noopener noreferrer">主页</a>` : '-';
-      const postUrlHtml = safePost ? `<a href="${escapeHtml(safePost)}" target="_blank" rel="noopener noreferrer">贴文</a>` : '-';
+      const postUrlHtml = safePost ? `<a href="${escapeHtml(safePost)}" target="_blank" rel="noopener noreferrer">查看</a>` : '-';
       
+      const safePlatform = item.platform === 'youtube'
+        ? '<span class="tag" style="background:rgba(239,68,68,0.18); color:#fca5a5;">YT</span>'
+        : '<span class="tag" style="background:rgba(59,130,246,0.18); color:#93c5fd;">FB</span>';
       const safeUserName = escapeHtml(item.userName);
       const safeKeyword = escapeHtml(item.matchedKeyword);
       const safeComment = escapeHtml(item.commentText);
@@ -547,6 +596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       tr.innerHTML = `
         <td>${escapeHtml(item.timestamp)}</td>
+        <td>${safePlatform}</td>
         <td><b>${safeUserName}</b></td>
         <td>${profileLinkHtml}</td>
         <td>${postUrlHtml}</td>
@@ -935,4 +985,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 // 一键打开评论管理工具
 document.getElementById('btnOpenCommentsManagerFromDash')?.addEventListener('click', () => {
   window.open("https://www.facebook.com/professional_dashboard/engagement/comments_manager/", "_blank");
+});
+
+// 一键打开 YouTube Studio 评论后台
+document.getElementById('btnOpenYtStudioFromDash')?.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ action: "OPEN_YT_STUDIO_COMMENTS" }, () => {
+    if (chrome.runtime.lastError) {
+      window.open("https://studio.youtube.com/", "_blank");
+    }
+  });
 });

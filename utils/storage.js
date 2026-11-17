@@ -20,6 +20,24 @@ const DEFAULT_SETTINGS = {
     totalProcessed: 0,
     totalDmSent: 0,
     totalErrors: 0
+  },
+
+  // ── YouTube Studio 独立运行配置与状态 ──
+  ytIsRunning: false,
+  ytIsPaused: false,
+  ytCooldownHours: 24, // 同用户 24 小时冷却
+  ytReplyIntervalSeconds: 20, // 连续公开回复防吞评间隔（秒，建议 15~30）
+  ytIdleRefreshSeconds: 20, // 空闲自动刷新间隔（秒）
+  ytAutoHeart: false, // 可选开关：回复时顺便点红心 ❤️（默认关闭，降低风控）
+  ytEnableTimeWindowFilter: false, // 是否开启时效过滤
+  ytMaxCommentAgeMinutes: 15, // 时效过滤最大分钟数
+  ytEmergencyBrakeReason: "",
+  ytStatusMessage: "YouTube 引擎就绪，等待启动...",
+  ytTaskSessionId: 0,
+  ytStats: {
+    totalProcessed: 0,
+    totalReplied: 0,
+    totalErrors: 0
   }
 };
 
@@ -27,6 +45,7 @@ const DEFAULT_RULES = [
   {
     id: "default_rule_1",
     name: "通用关键词触发",
+    platform: "facebook",
     matchType: "contains",
     keywords: ["Amen", "Amém", "领用", "资料", "价格", "想了解"],
     dmTemplates: [
@@ -60,7 +79,9 @@ const StorageUtil = {
   async getRules() {
     return new Promise((resolve) => {
       chrome.storage.local.get(['rules'], (res) => {
-        resolve(res.rules || DEFAULT_RULES);
+        const list = res.rules || DEFAULT_RULES;
+        // 兼容历史规则：未指定 platform 时默认归为 'facebook'，避免私信话术误发到 YouTube 公开评论
+        resolve(list.map(r => ({ platform: 'facebook', ...r })));
       });
     });
   },
@@ -100,8 +121,50 @@ const StorageUtil = {
 
   async clearUserHistory() {
     return new Promise((resolve) => {
-      chrome.storage.local.set({ userHistory: {}, processedComments: [] }, () => resolve({}));
+      chrome.storage.local.set({ userHistory: {}, processedComments: [], ytUserHistory: {}, ytProcessedComments: [] }, () => resolve({}));
     });
+  },
+
+  // ── YouTube 独立用户触达与已处理留言去重存储 ──
+  async getYtUserHistory() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['ytUserHistory'], (res) => {
+        resolve(res.ytUserHistory || {});
+      });
+    });
+  },
+
+  async recordYtUserTouch(userKey, record) {
+    const history = await this.getYtUserHistory();
+    const current = history[userKey] || {};
+    history[userKey] = {
+      ...current,
+      ...record,
+      lastTriggerTime: Date.now(),
+      lastReplyTime: record.replySentSuccess ? Date.now() : (current.lastReplyTime || 0)
+    };
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ ytUserHistory: history }, () => resolve(history));
+    });
+  },
+
+  async getYtProcessedComments() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['ytProcessedComments'], (res) => {
+        resolve(res.ytProcessedComments || []);
+      });
+    });
+  },
+
+  async markYtCommentProcessed(commentId) {
+    const list = await this.getYtProcessedComments();
+    if (!list.includes(commentId)) {
+      list.push(commentId);
+      if (list.length > 5000) list.shift();
+      return new Promise((resolve) => {
+        chrome.storage.local.set({ ytProcessedComments: list }, () => resolve(list));
+      });
+    }
   },
 
   /**
@@ -154,6 +217,7 @@ const StorageUtil = {
     const item = {
       id: "log_" + Date.now() + "_" + Math.floor(Math.random()*1000),
       timestamp: timeStr,
+      platform: logEntry.platform || "facebook",
       userName: logEntry.userName || "未知用户",
       postUrl: logEntry.postUrl || "",
       profileLink: logEntry.profileLink || "",

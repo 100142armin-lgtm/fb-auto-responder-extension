@@ -129,6 +129,62 @@ body {
   50% { opacity: 0.4; }
 }
 
+/* Platform Tabs */
+.platform-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.platform-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.platform-tab:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.platform-tab.active[data-platform="facebook"] {
+  background: rgba(24, 119, 242, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(24, 119, 242, 0.4);
+}
+
+.platform-tab.active[data-platform="youtube"] {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.tab-dot.running {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+}
+
 /* Identity Notice */
 .identity-notice {
   background: rgba(24, 119, 242, 0.08);
@@ -184,8 +240,8 @@ body {
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .stat-card {

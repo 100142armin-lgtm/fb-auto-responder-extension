@@ -21,7 +21,23 @@ async function setWorkerState(newState) {
   });
 }
 
-console.log("FB Auto-Responder Service Worker v6.0.0 Initialized (Pure Comments Manager Mode A).");
+async function getYtWorkerState() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['ytWorkerState'], (res) => {
+      resolve(res.ytWorkerState || { workerTabId: null });
+    });
+  });
+}
+
+async function setYtWorkerState(newState) {
+  const current = await getYtWorkerState();
+  const updated = { ...current, ...newState };
+  return new Promise(resolve => {
+    chrome.storage.local.set({ ytWorkerState: updated }, () => resolve(updated));
+  });
+}
+
+console.log("FB & YT Auto-Responder Service Worker v7.0.0 Initialized.");
 
 function isValidGoogleAppsScriptUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -87,6 +103,29 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
       sendResponse({ success: false, error: err.message });
     });
     return true; // 异步响应
+  } else if (req.action === "YT_START_MONITOR") {
+    if (!isInternalPage) return false;
+    startYtMonitoring();
+    sendResponse({ status: "STARTED" });
+  } else if (req.action === "YT_PAUSE_MONITOR") {
+    if (!isInternalPage) return false;
+    stopYtMonitoring(true);
+    sendResponse({ status: "PAUSED" });
+  } else if (req.action === "YT_STOP_MONITOR") {
+    if (!isInternalPage) return false;
+    stopYtMonitoring(false);
+    sendResponse({ status: "STOPPED" });
+  } else if (req.action === "YT_TRIGGER_EMERGENCY_BRAKE") {
+    triggerYtEmergencyBrake(req.reason);
+    sendResponse({ status: "BRAKED" });
+  } else if (req.action === "YT_PAGE_FINISHED") {
+    scheduleYtNextPoll();
+    sendResponse({ status: "ACK" });
+  } else if (req.action === "OPEN_YT_STUDIO_COMMENTS") {
+    if (!isInternalPage) return false;
+    openOrFocusYtCommentsTab();
+    sendResponse({ status: "OPENED" });
+    return true;
   }
   return true;
 });
@@ -270,7 +309,147 @@ chrome.tabs.onRemoved.addListener(async (closedTabId) => {
     console.log(`[Worker Tab Guard] 工作标签页 ${closedTabId} 已被关闭，自动重置状态`);
     await setWorkerState({ workerTabId: null });
   }
+  const ytState = await getYtWorkerState();
+  if (ytState.workerTabId === closedTabId) {
+    console.log(`[YT Tab Guard] YouTube 工作标签页 ${closedTabId} 已被关闭，自动重置状态`);
+    await setYtWorkerState({ workerTabId: null });
+  }
 });
+
+// ── YouTube Studio 独立调度逻辑 ───────────────────────────────────────────
+
+async function startYtMonitoring() {
+  await StorageUtil.saveSettings({
+    ytIsRunning: true,
+    ytIsPaused: false,
+    ytEmergencyBrakeReason: ""
+  });
+  await ensureYtWorkerTab(false);
+}
+
+async function stopYtMonitoring(isPaused) {
+  await StorageUtil.saveSettings({ ytIsRunning: false, ytIsPaused: isPaused });
+  if (!isPaused) {
+    const ytState = await getYtWorkerState();
+    if (ytState.workerTabId) {
+      chrome.tabs.remove(ytState.workerTabId, () => {
+        if (chrome.runtime.lastError) { /* suppress */ }
+      });
+    }
+    await setYtWorkerState({ workerTabId: null });
+  }
+}
+
+async function scheduleYtNextPoll() {
+  const settings = await StorageUtil.getSettings();
+  if (!settings.ytIsRunning || settings.ytIsPaused) return;
+  const waitSec = Math.max(5, settings.ytIdleRefreshSeconds || 20);
+  setTimeout(() => {
+    ensureYtWorkerTab(false);
+  }, waitSec * 1000);
+}
+
+async function openOrFocusYtCommentsTab() {
+  const tab = await ensureYtWorkerTab(true);
+  if (tab && tab.id) {
+    chrome.tabs.update(tab.id, { active: true });
+  }
+}
+
+async function ensureYtWorkerTab(forceActive = false) {
+  const settings = await StorageUtil.getSettings();
+  if (!forceActive && (!settings.ytIsRunning || settings.ytIsPaused)) return null;
+
+  const ytState = await getYtWorkerState();
+  let activeYtTab = null;
+
+  if (ytState.workerTabId) {
+    activeYtTab = await new Promise(resolve => {
+      chrome.tabs.get(ytState.workerTabId, tab => {
+        if (chrome.runtime.lastError || !tab) resolve(null);
+        else resolve(tab);
+      });
+    });
+  }
+
+  const allYtTabs = await new Promise(resolve => {
+    chrome.tabs.query({ url: ["https://studio.youtube.com/*"] }, tabs => {
+      if (chrome.runtime.lastError || !tabs) resolve([]);
+      else resolve(tabs);
+    });
+  });
+
+  if (!activeYtTab && allYtTabs.length > 0) {
+    const matched = allYtTabs.find(t => t.url && t.url.includes('/comments')) || allYtTabs[0];
+    if (matched) {
+      activeYtTab = matched;
+      await setYtWorkerState({ workerTabId: matched.id });
+    }
+  }
+
+  if (activeYtTab) {
+    chrome.tabs.update(activeYtTab.id, { autoDiscardable: false, active: forceActive }, () => {
+      if (chrome.runtime.lastError) { /* ignore */ }
+    });
+    if (activeYtTab.url && activeYtTab.url.includes('/comments')) {
+      chrome.tabs.sendMessage(activeYtTab.id, { action: "SOFT_REFRESH_YT_COMMENTS" }, () => {
+        if (chrome.runtime.lastError) { /* ignore */ }
+      });
+    } else if (activeYtTab.url && /studio\.youtube\.com\/channel\/[^/]+/.test(activeYtTab.url)) {
+      const m = activeYtTab.url.match(/(https:\/\/studio\.youtube\.com\/channel\/[^/?#]+)/);
+      if (m) {
+        chrome.tabs.update(activeYtTab.id, { url: m[1] + "/comments/inbox" });
+      }
+    }
+    return activeYtTab;
+  }
+
+  return new Promise(resolve => {
+    chrome.tabs.create({ url: "https://studio.youtube.com/", active: forceActive }, async (newTab) => {
+      if (chrome.runtime.lastError || !newTab) {
+        resolve(null);
+        return;
+      }
+      await setYtWorkerState({ workerTabId: newTab.id });
+      chrome.tabs.update(newTab.id, { autoDiscardable: false }, () => {
+        if (chrome.runtime.lastError) { /* ignore */ }
+      });
+      resolve(newTab);
+    });
+  });
+}
+
+async function triggerYtEmergencyBrake(reason) {
+  try {
+    await stopYtMonitoring(true);
+    const alertMsg = reason || "检测到 YouTube 安全验证或频繁操作警告，系统已自动熔断暂停！";
+    await StorageUtil.saveSettings({
+      ytIsRunning: false,
+      ytIsPaused: false,
+      ytEmergencyBrakeReason: alertMsg,
+      ytStatusMessage: "🚨 YouTube 触发紧急熔断保护，任务已终止！"
+    });
+    await StorageUtil.addLog({
+      platform: "youtube",
+      userName: "风控引擎",
+      postUrl: "YouTube Studio 风控检测",
+      matchedKeyword: "熔断报警",
+      dmStatus: "紧急刹车",
+      level: "error"
+    });
+    const iconUrl = chrome.runtime.getURL('assets/icon128.png');
+    chrome.notifications.create("yt_emergency_brake", {
+      type: "basic",
+      iconUrl: iconUrl,
+      title: "YouTube 评论助手 - 紧急熔断通知",
+      message: alertMsg
+    }, () => {
+      if (chrome.runtime.lastError) { /* suppress */ }
+    });
+  } catch (err) {
+    console.error("triggerYtEmergencyBrake error:", err);
+  }
+}
 
 // ── 触发风控紧急熔断保护 ──────────────────────────────────────────────────
 async function triggerEmergencyBrake(reason) {

@@ -466,8 +466,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputYtIdleInterval = document.getElementById('inputYtIdleInterval');
   const inputYtCooldown = document.getElementById('inputYtCooldown');
   const checkYtAutoHeart = document.getElementById('checkYtAutoHeart');
+  const inputYtMaxScrollPages = document.getElementById('inputYtMaxScrollPages');
   const checkYtEnableTimeWindowFilter = document.getElementById('checkYtEnableTimeWindowFilter');
-  const inputYtMaxCommentAgeMinutes = document.getElementById('inputYtMaxCommentAgeMinutes');
+  const inputYtTimeWindowValue = document.getElementById('inputYtTimeWindowValue');
+  const selectYtTimeWindowUnit = document.getElementById('selectYtTimeWindowUnit');
   const btnSaveAntiban = document.getElementById('btnSaveAntiban');
   const tipSaveAntiban = document.getElementById('tipSaveAntiban');
   const btnResetUserHistory = document.getElementById('btnResetUserHistory');
@@ -486,8 +488,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (inputYtIdleInterval) inputYtIdleInterval.value = settings.ytIdleRefreshSeconds !== undefined ? settings.ytIdleRefreshSeconds : 20;
     if (inputYtCooldown) inputYtCooldown.value = settings.ytCooldownHours !== undefined ? settings.ytCooldownHours : 24;
     if (checkYtAutoHeart) checkYtAutoHeart.checked = !!settings.ytAutoHeart;
+    if (inputYtMaxScrollPages) inputYtMaxScrollPages.value = settings.ytMaxScrollPages || 10;
     if (checkYtEnableTimeWindowFilter) checkYtEnableTimeWindowFilter.checked = !!settings.ytEnableTimeWindowFilter;
-    if (inputYtMaxCommentAgeMinutes) inputYtMaxCommentAgeMinutes.value = settings.ytMaxCommentAgeMinutes || 15;
+    if (inputYtTimeWindowValue) inputYtTimeWindowValue.value = settings.ytTimeWindowValue || 7;
+    if (selectYtTimeWindowUnit) selectYtTimeWindowUnit.value = settings.ytTimeWindowUnit || 'days';
   }
 
   async function saveAntibanSettings() {
@@ -505,8 +509,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ytCdHrRaw = parseInt(inputYtCooldown?.value, 10);
     const ytCdHr = isNaN(ytCdHrRaw) ? 24 : ytCdHrRaw;
     const ytAutoHeart = checkYtAutoHeart ? checkYtAutoHeart.checked : false;
+    const ytMaxScrollPages = parseInt(inputYtMaxScrollPages?.value, 10) || 10;
     const ytEnableTimeWindow = checkYtEnableTimeWindowFilter ? checkYtEnableTimeWindowFilter.checked : false;
-    const ytMaxAge = parseInt(inputYtMaxCommentAgeMinutes?.value, 10) || 15;
+    const ytTimeWindowVal = Math.max(1, parseInt(inputYtTimeWindowValue?.value, 10) || 7);
+    const ytTimeWindowUnit = selectYtTimeWindowUnit ? selectYtTimeWindowUnit.value : 'days';
+    const ytMaxAgeMinutes = ytTimeWindowUnit === 'days'
+      ? ytTimeWindowVal * 1440
+      : (ytTimeWindowUnit === 'hours' ? ytTimeWindowVal * 60 : ytTimeWindowVal);
 
     await StorageUtil.saveSettings({
       enableCommentsManagerMode: true,
@@ -523,8 +532,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       ytIdleRefreshSeconds: Math.max(5, ytIdleSec),
       ytCooldownHours: Math.max(0, ytCdHr),
       ytAutoHeart: ytAutoHeart,
+      ytMaxScrollPages: Math.max(1, Math.min(50, ytMaxScrollPages)),
       ytEnableTimeWindowFilter: ytEnableTimeWindow,
-      ytMaxCommentAgeMinutes: Math.max(1, ytMaxAge)
+      ytTimeWindowValue: ytTimeWindowVal,
+      ytTimeWindowUnit: ytTimeWindowUnit,
+      ytMaxCommentAgeMinutes: ytMaxAgeMinutes
     });
 
     tipSaveAntiban.textContent = "✓ 防封与去重策略已保存！";
@@ -543,8 +555,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (inputYtIdleInterval) inputYtIdleInterval.addEventListener('change', saveAntibanSettings);
   if (inputYtCooldown) inputYtCooldown.addEventListener('change', saveAntibanSettings);
   if (checkYtAutoHeart) checkYtAutoHeart.addEventListener('change', saveAntibanSettings);
+  if (inputYtMaxScrollPages) inputYtMaxScrollPages.addEventListener('change', saveAntibanSettings);
   if (checkYtEnableTimeWindowFilter) checkYtEnableTimeWindowFilter.addEventListener('change', saveAntibanSettings);
-  if (inputYtMaxCommentAgeMinutes) inputYtMaxCommentAgeMinutes.addEventListener('change', saveAntibanSettings);
+  if (inputYtTimeWindowValue) inputYtTimeWindowValue.addEventListener('change', saveAntibanSettings);
+  if (selectYtTimeWindowUnit) selectYtTimeWindowUnit.addEventListener('change', saveAntibanSettings);
 
   async function handleResetUserHistory() {
     if (confirm("确定重置/清空已触达用户的去重冷却记录吗？重置后所有用户均可重新触发回复！")) {

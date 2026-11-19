@@ -14,7 +14,7 @@
         <img src="../assets/icon128.png" alt="Logo" class="sidebar-logo">
         <div class="sidebar-title">
           <h2>FB & YT 智能助手</h2>
-          <span>Pro Studio v1.7.0</span>
+          <span>Pro Studio v1.7.1</span>
         </div>
       </div>
 
@@ -216,12 +216,23 @@
                     </div>
                   </div>
 
-                  <div style="margin-top: 12px; background: rgba(0, 0, 0, 0.15); border-radius: 6px; padding: 10px 14px;">
-                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; color: #e2e8f0; font-size: 13px;">
+                  <div style="margin-top: 12px; background: rgba(0, 0, 0, 0.15); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                      <label style="font-size: 13px; font-weight: 600; color: #e2e8f0;">📜 单轮最大历史翻页深度:</label>
+                      <input type="number" id="inputYtMaxScrollPages" class="form-input" min="1" max="50" value="10" style="width: 72px; padding: 3px 8px;">
+                      <span style="font-size: 12px; color: var(--text-muted);">屏（自动向下滚动加载历史未回复留言的页数，翻完后回顶部刷新拉取最新留言）</span>
+                    </div>
+
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; color: #e2e8f0; font-size: 13px; flex-wrap: wrap;">
                       <input type="checkbox" id="checkYtEnableTimeWindowFilter">
-                      <span>⏱️ YT 开启时效过滤：仅回复最近</span>
-                      <input type="number" id="inputYtMaxCommentAgeMinutes" class="form-input" min="1" max="1440" value="15" style="width: 70px; padding: 3px 6px;">
-                      <span>分钟内的新留言</span>
+                      <span>⏱️ 限制留言时间范围（不勾选 = 🌐 不限时间，回复全部历史未回复留言）：仅回复最近</span>
+                      <input type="number" id="inputYtTimeWindowValue" class="form-input" min="1" max="99999" value="7" style="width: 76px; padding: 3px 6px;">
+                      <select id="selectYtTimeWindowUnit" class="form-select" style="width: auto; padding: 3px 8px;">
+                        <option value="minutes">分钟</option>
+                        <option value="hours">小时</option>
+                        <option value="days" selected>天</option>
+                      </select>
+                      <span>内的留言</span>
                     </label>
                   </div>
                 </div>

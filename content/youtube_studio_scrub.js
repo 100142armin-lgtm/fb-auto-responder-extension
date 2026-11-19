@@ -268,15 +268,81 @@
     return threads.filter(t => isVisible(t));
   }
 
+  // ── 定位 YouTube Studio 真正的可滚动容器并执行向下翻页 / 回顶 ──────────────
+  function findScrollContainer(anchorEl) {
+    let cur = anchorEl ? anchorEl.parentElement : null;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      const style = window.getComputedStyle(cur);
+      const overflowY = style.overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && cur.scrollHeight > cur.clientHeight + 50) {
+        return cur;
+      }
+      cur = cur.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function scrollCommentsDown(threads) {
+    try {
+      if (threads && threads.length > 0) {
+        const lastThread = threads[threads.length - 1];
+        lastThread.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        const container = findScrollContainer(lastThread);
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+      window.scrollBy({ top: 1200, behavior: 'smooth' });
+    } catch (e) { /* ignore */ }
+  }
+
+  function scrollCommentsToTop(threads) {
+    try {
+      if (threads && threads.length > 0) {
+        const container = findScrollContainer(threads[0]);
+        if (container) container.scrollTop = 0;
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) { /* ignore */ }
+  }
+
+  // ── 计算 YouTube 时效过滤最大分钟数（未开启时返回 Infinity = 不限时间） ───
+  function getYtMaxAllowedMinutes(settings) {
+    if (!settings || settings.ytEnableTimeWindowFilter !== true) {
+      return Infinity;
+    }
+    const val = Number(settings.ytTimeWindowValue);
+    const unit = settings.ytTimeWindowUnit;
+    if (val > 0 && unit) {
+      if (unit === 'days') return val * 1440;
+      if (unit === 'hours') return val * 60;
+      return val;
+    }
+    return Number(settings.ytMaxCommentAgeMinutes) || 10080;
+  }
+
   // ── 解析单条评论线程 ──────────────────────────────────────────────────────
   function parseCommentThread(threadEl) {
     try {
       const comments = querySelectorAllDeep('ytcp-comment', threadEl);
       if (comments.length === 0) return null;
 
-      // 第一个 ytcp-comment 是主评论；如果大于 1 个，通常意味着下面已有回复
+      // 第一个 ytcp-comment 是主评论；后续仅检查是否已有“频道主本人”回复（避免路人楼中楼误伤）
       const mainComment = comments[0];
-      const hasExistingReplies = comments.length > 1;
+      let hasCreatorReply = false;
+      if (comments.length > 1) {
+        for (let i = 1; i < comments.length; i++) {
+          const sub = comments[i];
+          const ownerBadge = querySelectorDeep(
+            'ytcp-comment-author-badge[type="OWNER"], [is-creator], .creator-badge, #author-comment-badge',
+            sub
+          );
+          if (ownerBadge && isVisible(ownerBadge)) {
+            hasCreatorReply = true;
+            break;
+          }
+        }
+      }
 
       // 提取用户名与频道链接
       let userName = "";
@@ -322,7 +388,7 @@
       return {
         threadEl,
         mainComment,
-        hasExistingReplies,
+        hasCreatorReply,
         userName,
         ytUserId,
         profileLink,
@@ -575,46 +641,55 @@
       const userHistory = await StorageUtil.getYtUserHistory();
       const cooldownHours = settings.ytCooldownHours !== undefined ? settings.ytCooldownHours : 24;
       const cooldownMs = cooldownHours * 60 * 60 * 1000;
+      const maxScrollPages = Math.max(1, Math.min(50, Number(settings.ytMaxScrollPages) || 10));
 
       let processedInBatch = 0;
+      let currentPage = 0;
 
-      for (const threadEl of threads) {
-        const curSettings = await StorageUtil.getSettings();
-        if (!curSettings.ytIsRunning || curSettings.ytIsPaused) {
-          isProcessingLoop = false;
-          return;
-        }
-        if (checkYoutubeEmergencyBrake()) {
-          isProcessingLoop = false;
-          return;
-        }
+      // 支持自动向下翻页加载历史留言（直到触底或达到单轮最大翻页深度）
+      while (currentPage <= maxScrollPages) {
+        threads = findCommentThreads();
 
-        const parsed = parseCommentThread(threadEl);
-        if (!parsed || !parsed.commentText) continue;
+        for (const threadEl of threads) {
+          const curSettings = await StorageUtil.getSettings();
+          if (!curSettings.ytIsRunning || curSettings.ytIsPaused) {
+            isProcessingLoop = false;
+            return;
+          }
+          if (checkYoutubeEmergencyBrake()) {
+            isProcessingLoop = false;
+            return;
+          }
 
-        // 兜底检查：若已有子评论回复，跳过
-        if (parsed.hasExistingReplies) continue;
+          const parsed = parseCommentThread(threadEl);
+          if (!parsed || !parsed.commentText) continue;
 
-        const commentKey = `yt_${parsed.userName}_${parsed.commentText}`.replace(/\s+/g, '_');
+          // 精准兜底：仅跳过明确包含频道主本人回复的线程，不误伤路人楼中楼
+          if (parsed.hasCreatorReply) continue;
 
-        // 统计已扫留言（跨自动刷新去重）
-        if (!sessionScannedKeys.has(commentKey)) {
-          persistScannedKey(commentKey);
-          const stats = curSettings.ytStats || { totalProcessed: 0, totalReplied: 0, totalErrors: 0 };
-          stats.totalProcessed += 1;
-          await StorageUtil.saveSettings({ ytStats: stats });
-        }
+          const commentKey = `yt_${parsed.userName}_${parsed.commentText}`.replace(/\s+/g, '_');
 
-        if (sessionProcessedKeys.has(commentKey) || processedComments.includes(commentKey)) {
-          continue;
-        }
+          // 统计已扫留言（跨自动刷新去重）
+          if (!sessionScannedKeys.has(commentKey)) {
+            persistScannedKey(commentKey);
+            const stats = curSettings.ytStats || { totalProcessed: 0, totalReplied: 0, totalErrors: 0 };
+            stats.totalProcessed += 1;
+            await StorageUtil.saveSettings({ ytStats: stats });
+          }
 
-        // 时效过滤
-        if (curSettings.ytEnableTimeWindowFilter) {
-          const maxAge = curSettings.ytMaxCommentAgeMinutes || 15;
-          const age = parseCommentAgeMinutes(parsed.commentTime);
-          if (age > maxAge) continue;
-        }
+          if (sessionProcessedKeys.has(commentKey) || processedComments.includes(commentKey)) {
+            continue;
+          }
+
+          // 时效过滤（默认不开启 = 不限时间，自动处理含历史老留言）
+          const maxAllowedMinutes = getYtMaxAllowedMinutes(curSettings);
+          if (maxAllowedMinutes !== Infinity) {
+            const age = parseCommentAgeMinutes(parsed.commentTime);
+            if (age > maxAllowedMinutes) {
+              sessionProcessedKeys.add(commentKey);
+              continue;
+            }
+          }
 
         // 24小时用户冷却去重
         const normName = parsed.userName.toLowerCase().trim();
@@ -736,15 +811,41 @@
           ytStatusMessage: `已回复 [${parsed.userName}]，等待 ${Math.round(waitMs / 1000)} 秒防风控后继续...`
         });
         await sleep(waitMs);
+        }
+
+        // 本屏处理完毕，尝试向下自动滚动加载更多历史留言
+        if (currentPage >= maxScrollPages) {
+          break;
+        }
+
+        const prevCount = findCommentThreads().length;
+        let loadedMore = false;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          await StorageUtil.saveSettings({
+            ytStatusMessage: `正在向下滚动加载更多历史留言 (第 ${currentPage + 1}/${maxScrollPages} 屏)...`
+          });
+          scrollCommentsDown(findCommentThreads());
+          await sleep(2200);
+          const nextCount = findCommentThreads().length;
+          if (nextCount > prevCount) {
+            loadedMore = true;
+            break;
+          }
+        }
+
+        if (!loadedMore) {
+          break; // 已触底，没有更多历史留言
+        }
+        currentPage++;
       }
 
-      // 扫描完成一轮
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // 扫描完成一轮（触底或达到单轮最大翻页深度），回顶部刷新同步最新进来的留言
+      scrollCommentsToTop(threads);
       const waitSec = Math.max(5, settings.ytIdleRefreshSeconds || 20);
       await StorageUtil.saveSettings({
         ytStatusMessage: processedInBatch > 0
-          ? `本轮已处理 ${processedInBatch} 条，${waitSec} 秒后自动刷新同步新留言...`
-          : `当前未发现匹配规则的新留言，${waitSec} 秒后自动刷新同步...`
+          ? `本轮已处理 ${processedInBatch} 条（巡检 ${currentPage + 1} 屏），${waitSec} 秒后自动刷新同步新留言...`
+          : `已巡检 ${currentPage + 1} 屏未发现新匹配留言，${waitSec} 秒后自动刷新同步...`
       });
       isProcessingLoop = false;
       scheduleNextPollOrReload(waitSec, true);

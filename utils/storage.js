@@ -29,8 +29,11 @@ const DEFAULT_SETTINGS = {
   ytReplyIntervalSeconds: 20, // 连续公开回复防吞评间隔（秒，建议 15~30）
   ytIdleRefreshSeconds: 20, // 空闲自动刷新间隔（秒）
   ytAutoHeart: false, // 可选开关：回复时顺便点红心 ❤️（默认关闭，降低风控）
-  ytEnableTimeWindowFilter: false, // 是否开启时效过滤
-  ytMaxCommentAgeMinutes: 15, // 时效过滤最大分钟数
+  ytEnableTimeWindowFilter: false, // false = 不限时间（新老兼顾，含历史留言）；true = 按时间窗口过滤
+  ytTimeWindowValue: 7, // 时效过滤数值
+  ytTimeWindowUnit: "days", // 时效过滤单位: minutes | hours | days
+  ytMaxCommentAgeMinutes: 10080, // 兼容旧字段 (7天)
+  ytMaxScrollPages: 10, // 单轮巡检最多向下自动滚动加载的历史页数
   ytEmergencyBrakeReason: "",
   ytStatusMessage: "YouTube 引擎就绪，等待启动...",
   ytTaskSessionId: 0,

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FB & YT 智能营销助手",
   "short_name": "FB & YT Auto-Responder",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "全自动驻留 Facebook 评论管理工具 & YouTube Studio 评论后台，双平台集中监控、智能私信与公开回复，极致防封安全稳定。",
   "icons": {
     "16": "assets/icon16.png",
@@ -12,7 +12,7 @@
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": "assets/icon48.png",
-    "default_title": "FB & YT 智能营销助手 v1.7.1"
+    "default_title": "FB & YT 智能营销助手 v1.7.2"
   },
   "permissions": [
     "storage",

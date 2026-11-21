@@ -23,15 +23,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (!btnStart) return;
 
+  // 读取上次记住的平台面板（优先从 chrome.storage.local 读取，支持跨会话永久记忆）
   let currentPlatform = 'facebook';
-
-  // 智能识别当前活动标签页，若用户正在看 YouTube Studio 则默认切到 YT 面板
   try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (activeTab && activeTab.url && activeTab.url.includes('studio.youtube.com')) {
-      currentPlatform = 'youtube';
+    const saved = await new Promise((resolve) => {
+      chrome.storage.local.get(['lastSelectedPlatform'], (res) => resolve(res.lastSelectedPlatform));
+    });
+    if (saved === 'youtube' || saved === 'facebook') {
+      currentPlatform = saved;
     }
   } catch (e) { /* ignore */ }
+
+  function saveSelectedPlatform(platform) {
+    try {
+      chrome.storage.local.set({ lastSelectedPlatform: platform });
+    } catch (e) { /* ignore */ }
+  }
 
   function updatePlatformTabUI() {
     if (currentPlatform === 'facebook') {
@@ -51,12 +58,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   tabBtnFb?.addEventListener('click', () => {
     currentPlatform = 'facebook';
+    saveSelectedPlatform('facebook');
     updatePlatformTabUI();
     refreshUI();
   });
 
   tabBtnYt?.addEventListener('click', () => {
     currentPlatform = 'youtube';
+    saveSelectedPlatform('youtube');
     updatePlatformTabUI();
     refreshUI();
   });
